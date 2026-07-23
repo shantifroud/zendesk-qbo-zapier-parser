@@ -6,65 +6,73 @@
  * a structured JSON array for QuickBooks Online invoice draft creation.
  */
 
-const coursesInput = inputData.courses || "";
-
-// Genericized SKU Lookup Table (Anonymized for Portfolio)
-const skuLookup = {
-  // Core Courses
-  "COURSE-A": "101",
-  "COURSE-B": "102",
-  "COURSE-C": "103",
-  "COURSE-D": "104",
-  "COURSE-E": "105",
-  "COURSE-F": "106",
-  "COURSE-G": "107",
-  "COURSE-H": "108",
-  "COURSE-I": "109",
-  "COURSE-J": "110",
-
-  // Specialized / Regional Certification Modules
-  "REG-CERT-1": "201",
-  "REG-CERT-2": "202",
-  "SAFETY-MOD-A": "301",
-  "SAFETY-MOD-B": "302",
-  "COMPLIANCE-X": "401",
-  "COMPLIANCE-Y": "402"
-};
+const itemsInput = inputData.courses || "";
 
 /**
- * Normalizes input text and parses line items into structured SKU/Quantity pairs
+ * Genericized Product SKU, ID, and Pricing Lookup Table
+ * Maps inventory item codes to internal catalog IDs and tiered pricing.
  */
-function parseCoursePayload(rawInput) {
-  if (!rawInput.trim()) return [];
+const catalogLookup = {
+  // Tier 1 - Standard Digital Items ($25.00)
+  "SKU-101": { id: "101", price: 25.00 },
+  "SKU-102": { id: "102", price: 25.00 },
+  "SKU-103": { id: "103", price: 25.00 },
 
-  const lineItems = rawInput.split(/\r?\n|,/);
-  const parsedResults = [];
+  // Tier 2 - Core Modules ($50.00)
+  "SKU-201": { id: "201", price: 50.00 },
+  "SKU-202": { id: "202", price: 50.00 },
+  "SKU-203": { id: "203", price: 50.00 },
 
-  lineItems.forEach(item => {
-    const trimmedItem = item.trim();
-    if (!trimmedItem) return;
+  // Tier 3 - Advanced Services ($100.00)
+  "SKU-301": { id: "301", price: 100.00 },
+  "SKU-302": { id: "302", price: 100.00 },
 
-    // Matches patterns like "COURSE-A x 5", "COURSE-B x2", "COURSE-C 10", or just "COURSE-D"
-    const match = trimmedItem.match(/^([A-Z0-9-]+)(?:\s*(?:x|\*|\s)\s*(\d+))?$/i);
+  // Tier 4 - Premium Packages ($150.00)
+  "SKU-401": { id: "401", price: 150.00 },
+  "SKU-402": { id: "402", price: 150.00 }
+};
 
-    if (match) {
-      const rawCode = match[1].toUpperCase();
-      const quantity = match[2] ? parseInt(match[2], 10) : 1;
+const lineItems = [];
+const skipped = [];
 
-      // Map to SKU lookup table
-      if (skuLookup[rawCode]) {
-        parsedResults.push({
-          itemCode: rawCode,
-          sku: skuLookup[rawCode],
-          quantity: quantity
-        });
-      }
-    }
+// Split input string into individual line item entries
+const entries = itemsInput.split(",").map(e => e.trim()).filter(Boolean);
+
+for (const entry of entries) {
+  // Matches patterns like "2 x SKU-101" or "2xSKU-101"
+  const match = entry.match(/^(\d+)\s*x\s*([A-Z0-9\-]+)$/i);
+  if (!match) {
+    skipped.push(entry);
+    continue;
+  }
+
+  const quantity = Number(match[1]);
+  const itemCode = match[2].toUpperCase();
+  const matchData = catalogLookup[itemCode];
+
+  if (!matchData) {
+    skipped.push(`${quantity}x ${itemCode} (no ID)`);
+    continue;
+  }
+
+  const unitPrice = Number(matchData.price || 0);
+  const lineAmount = Number((quantity * unitPrice).toFixed(2));
+
+  lineItems.push({
+    quantity: quantity,
+    id: matchData.id,
+    price: unitPrice,
+    amount: lineAmount,
+    description: itemCode
   });
-
-  return parsedResults;
 }
 
-// Execute parser and output structured data for Zapier
-const outputData = parseCoursePayload(coursesInput);
-output = { items: outputData };
+// Structure arrays for Zapier line-item mapping
+output = {
+  ids: lineItems.map(item => item.id),
+  quantities: lineItems.map(item => item.quantity),
+  prices: lineItems.map(item => item.price),
+  amounts: lineItems.map(item => item.amount),
+  descriptions: lineItems.map(item => item.description),
+  skipped: skipped.join(", ") || "none"
+};
