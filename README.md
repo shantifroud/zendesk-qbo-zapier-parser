@@ -28,14 +28,16 @@ Manual invoice requests created operational friction between Support and Account
 
 ---
 
-## 💡 Input vs. Output Example
+## 💡Input vs. Output Example
 
 **Zendesk Internal Note Payload (Input):**
 ```text
 Items: 2 x SKU-101, 1 x SKU-201
 Service Dates: 2026-08-15, 2026-08-16
+```
 
-Parsed Output (Mapped to QBO API):
+**Parsed Output (Mapped to QBO API):**
+```json
 {
   "ids": ["101", "201"],
   "quantities": [2, 1],
@@ -46,4 +48,5 @@ Parsed Output (Mapped to QBO API):
   "serviceDates": ["2026-08-15", "2026-08-16"],
   "skipped": "none"
 }
+```
 
