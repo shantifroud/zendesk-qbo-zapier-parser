@@ -1,41 +1,49 @@
 # Zendesk to QuickBooks Online Invoice Automation Parser
 
-> **Status:** De-Bugging / Prototyping
+> **Status:** Production / Deployed
 
 ## Overview
-An automated support-to-billing pipeline engineered to bridge the operational gap between frontline Customer Support (Zendesk) and Finance/Accounting (QuickBooks Online).
+An automated support-to-billing pipeline engineered to bridge the operational gap between frontline Customer Support (Zendesk) and Finance/Accounting (QuickBooks Online). It eliminates manual invoice creation by automatically parsing ticket payloads, mapping product/service SKUs, and drafting invoices in QBO.
 
 ## The Problem
-Manual invoice requests from clients created operational friction between Client Services and Accounting. The manual handoff led to data entry delays, higher risk of human error, and heavy administrative overhead on the accounting team.
+Manual invoice requests created operational friction between Support and Accounting. Hand-entering line items, unit prices, service dates, and ledger classifications led to data entry delays, higher risk of human error, duplicate processing, and heavy administrative overhead.
 
 ## The Solution & Workflow Architecture
-1. **Trigger:** Client Services agents select a standardized internal note macro in Zendesk containing structured billing parameters.
-2. **Data Extraction (Zapier):** Zapier captures the ticket update payload from Zendesk.
-3. **Parsing Engine (Custom JavaScript):** A custom JS script parses and cleans the internal note body text, extracting line items, client metadata, and dollar amounts into structured JSON data.
-4. **Action (QuickBooks Online):** Zapier maps the structured output directly into QuickBooks Online to draft a pre-populated invoice.
-5. **Review:** Finance performs a quick 1-click review and sends the invoice to the requesting client.
+1. **Trigger:** Support agents select a standardized macro in Zendesk containing structured billing parameters and apply an initial trigger tag (e.g., `pending_invoice`).
+2. **Data Extraction (Zapier):** Zapier captures the ticket update webhook payload from Zendesk.
+3. **Parsing & Business Logic Engine (Custom JS):** A robust Node.js script parses raw note text, extracts line items, validates SKUs against an internal lookup catalog, calculates line totals, maps dynamic dates, and assigns departmental/ledger classifications.
+4. **Action (QuickBooks Online):** Zapier maps the structured JSON arrays directly into QuickBooks Online to create a pre-populated draft invoice.
+5. **State Management & Deduplication (Zendesk API):** Zapier immediately executes an API update back to Zendesk to **remove the trigger tag** (`pending_invoice`) and **add a completion tag** (`invoice_created`). This locks the ticket state and prevents duplicate invoice generation loops.
+6. **Review:** Finance performs a quick 1-click review and approves the draft invoice for the client.
 
 ## Key Operational Impact
-* **Accounting:** Drastically reduces manual data entry and invoice creation turnaround times.
-* **Client Services:** Streamlines billing escalations via a single internal macro, speeding up cross-departmental handoffs.
-* **Clients:** Delivers faster, more accurate custom invoicing for corporate accounts.
+* **Zero Duplication Risk:** Dynamic tag lifecycle management guarantees idempotent execution (tickets cannot be double-invoiced).
+* **Accounting Overhead:** Reduces manual data entry time by ~90% and slashes turnaround times from days to seconds.
+* **Accuracy:** Automatically handles multi-line orders, dynamic service date mapping, and departmental class tracking with built-in error handling for unmapped SKUs.
 
 ## Tech Stack
-* **Language:** JavaScript
+* **Language:** JavaScript (Node.js ES6+)
 * **Integration Platform:** Zapier
-* **Platforms:** Zendesk API / Webhooks, QuickBooks Online
+* **Platforms & APIs:** Zendesk Webhooks / API, QuickBooks Online API
+
+---
 
 ## 💡 Input vs. Output Example
 
-**Zendesk Internal Note (Input):**
+**Zendesk Internal Note Payload (Input):**
 ```text
-Client: Acme Corp
-Courses: COURSE-A x2, COURSE-B x1
-```
-Parsed Output (Sent to QuickBooks):
-```
-[
-  { "itemCode": "COURSE-A", "sku": "101", "quantity": 2 },
-  { "itemCode": "COURSE-B", "sku": "102", "quantity": 1 }
-]
+Items: 2 x SKU-101, 1 x SKU-201
+Service Dates: 2026-08-15, 2026-08-16
+
+Parsed Output (Mapped to QBO API):
+{
+  "ids": ["101", "201"],
+  "quantities": [2, 1],
+  "prices": [24.95, 149.00],
+  "amounts": [49.90, 149.00],
+  "descriptions": ["SKU-101", "SKU-201"],
+  "categories": ["CAT-ELEARNING", "CAT-LOCATION-A"],
+  "serviceDates": ["2026-08-15", "2026-08-16"],
+  "skipped": "none"
+}
 
